@@ -1,0 +1,9 @@
+body {
+    margin: 0;
+    overflow: hidden; /* Evita que aparezcan barras de desplazamiento */
+    background-color: #7c7869; /* Fondo gris oscuro */
+}
+
+canvas {
+    display: block; /* Asegura que el canvas ocupe el espacio correcto sin márgenes extra */
+}
