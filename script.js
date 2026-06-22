@@ -110,7 +110,7 @@ card.position.set(
 }
 
 // Generar carta cada 250ms
-let cardInterval = setInterval(createCard, 800);
+let cardInterval = setInterval(createCard, 500);
 
 // Evitar acumulación de elementos al minimizar la ventana
 document.addEventListener('visibilitychange', () => {
