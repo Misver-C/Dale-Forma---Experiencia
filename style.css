@@ -1,10 +1,216 @@
 body {
     margin: 0;
     overflow: hidden; /* Evita que aparezcan barras de desplazamiento */
+    background-color: #000; /* Prevent white flash */
+}
+
+#main-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
     background-image: url('assets/paleta 2.png');
     background-size: cover;
+    z-index: 10;
+    clip-path: circle(0% at 50% 50%);
+    transition: clip-path 1.5s ease-in-out;
+}
+
+#main-content.reveal {
+    clip-path: circle(150% at 50% 50%);
+}
+
+#intro-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #e9e1cf;
+    z-index: 1; /* Detrás del main-content */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.logo-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.dale-container, .forma-container {
+    overflow: hidden;
+}
+
+.dale-container img {
+    display: block;
+    width: 50em;
+    height: auto;
+    transform: translateY(100%);
+    transition: transform 0.8s ease-out;
+}
+
+.forma-container img {
+    display: block;
+    width: 50em;
+    height: auto;
+    transform: translateY(-100%);
+    transition: transform 0.8s ease-out;
+}
+
+.logo-wrapper.animate .dale-container img,
+.logo-wrapper.animate .forma-container img {
+    transform: translateY(0);
+}
+
+.subtitle-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+}
+
+.icon-container {
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.icon-container img {
+    height: 2em;
+    width: auto;
+    transform: translateY(100%);
+    transition: transform 0.8s ease-out; /* user requested smooth end */
+}
+
+.subtitle-wrapper.animate-icon .icon-container img {
+    transform: translateY(0);
+}
+
+.text-container {
+    overflow: hidden;
+    max-width: 0;
+    white-space: nowrap;
+    transition: max-width 1s ease-in-out; /* user requested smooth start and end */
+    margin-left: 0;
+}
+
+.subtitle-wrapper.animate-text .text-container {
+    max-width: 600px;
+    margin-left: 10px;
+}
+
+.subtitle-text {
+    font-family: sans-serif;
+    color: #333;
+    font-size: 16px;
+    line-height: 20px;
+    display: inline-block;
 }
 
 canvas {
     display: block; /* Asegura que el canvas ocupe el espacio correcto sin márgenes extra */
+    position: relative;
+    z-index: 2; /* Keep canvas in front of trivia-bg */
+}
+
+/* --- Trivia Mode Styles --- */
+#trivia-bg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background-image: url('assets/paleta 3.png');
+    background-size: cover;
+    background-position: center;
+    z-index: 1; /* Between main background and canvas/UI */
+    opacity: 0;
+    transition: opacity 2s ease-out; /* 2s as requested, smooth fade */
+}
+
+#trivia-bg.active {
+    opacity: 1;
+}
+
+#trivia-ui {
+    position: absolute;
+    right: 0; top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-end; /* Align to the right edge */
+    z-index: 20; /* Above everything */
+    padding: 2.5em 0 2.5em 2.5em; /* Padding on top, bottom, left */
+    box-sizing: border-box;
+    transform: translateX(100%);
+    transition: transform 3s ease-out; /* 3s soft deceleration */
+}
+
+#trivia-ui.active {
+    transform: translateX(0);
+}
+
+.trivia-title {
+    font-family: sans-serif;
+    color: #333;
+    font-size: 1.5em;
+    margin-bottom: 1.25em;
+    margin-right: 2.5em; /* Push it slightly away from the right edge */
+    text-align: right;
+}
+
+.trivia-box {
+    background-color: white;
+    border-radius: 2.5em 0 0 2.5em; /* Left corners rounded */
+    padding: 2.5em;
+    display: flex;
+    flex-direction: column;
+    width: 31.25em;
+    box-shadow: -0.3125em 0 0.9375em rgba(0,0,0,0.1);
+}
+
+#model-viewer {
+    width: 100%;
+    height: 18.75em; /* Area for 3D object */
+    background-color: #f0f0f0;
+    border-radius: 1.25em;
+    margin-bottom: 1.25em;
+    position: relative;
+    overflow: hidden; /* Contains the secondary canvas */
+    border: 0.125em dashed #ccc; /* Placeholder style */
+}
+
+.trivia-buttons {
+    display: flex;
+    width: 100%;
+    border-radius: 1.25em;
+    overflow: hidden;
+    border: 0.125em solid #333;
+}
+
+.trivia-btn {
+    flex: 1;
+    padding: 0.9375em;
+    font-size: 1.125em;
+    font-family: sans-serif;
+    font-weight: bold;
+    border: none;
+    background-color: white;
+    color: #333;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.trivia-btn.left {
+    border-right: 0.125em solid #333;
+}
+
+.trivia-btn:hover {
+    background-color: #7c7869; /* Color de ejemplo, personalizable */
+    color: white;
 }

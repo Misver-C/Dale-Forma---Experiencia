@@ -8,7 +8,7 @@ camera.position.z = 5; // La cámara está en Z=5 mirando hacia el centro (Z=0 y
 // 2. Renderizador
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // alpha: true permite fondo transparente
 renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+document.getElementById('main-content').appendChild(renderer.domElement);
 
 // 3. Iluminación
 const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -24,16 +24,11 @@ scene.add(ambientLight);
 
 // 4. Texturas de las cartas
 const textureLoader = new THREE.TextureLoader();
-
-// ==========================================
-// IMPORTANTE: Aquí pones tus archivos PNG
-// Reemplaza estas URLs por el nombre de tus archivos
-// ==========================================
 const frontTexture = textureLoader.load('assets/cartas/conrev.png'); 
 
-// Precargar las 32 texturas posibles para los reversos
+// Precargar las 16 texturas posibles para los reversos
 const backTextures = [];
-for (let i = 1; i <= 12; i++) {
+for (let i = 1; i <= 16; i++) {
     // Aquí puedes cambiar a tus archivos locales, por ejemplo:
     // const url = `assets/cartas/reversos/${i}.png`;
     const url = `assets/cartas/contexto/${i}.png`;
@@ -203,6 +198,44 @@ window.addEventListener('mousemove', (event) => {
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 });
 
+let gameState = 'floating'; // 'floating', 'trivia_transition', 'trivia'
+let selectedCard = null;
+
+window.addEventListener('click', () => {
+    if (gameState === 'floating' && hoveredCard) {
+        gameState = 'trivia_transition';
+        selectedCard = hoveredCard;
+        
+        // Detener la generación de nuevas cartas
+        clearInterval(cardInterval);
+        
+        // Esconder el botón "Seleccionar carta"
+        if (btnGroup) btnGroup.visible = false;
+        
+        // Poner todas las demás cartas en fadeOut
+        cards.forEach(card => {
+            if (card !== selectedCard) {
+                card.userData.state = 'fadeOut';
+            }
+        });
+        
+        // Configurar la carta seleccionada para su animación a la izquierda
+        selectedCard.userData.targetPosX = -6; // Más alejada hacia la izquierda
+        selectedCard.userData.targetPosY = 0;
+        selectedCard.userData.targetPosZ = -4; // Más profunda para no acercarse tanto
+        selectedCard.userData.targetRotY = Math.PI * 5 + 0.5; // Math.PI * 5 = muestra el reverso (con texto). +0.5 la inclina
+        
+        // Iniciar transición del fondo tipo cortina
+        document.getElementById('trivia-bg').classList.add('active');
+        
+        // Luego de 2 segundos, mostrar UI y pasar a trivia
+        setTimeout(() => {
+            gameState = 'trivia';
+            document.getElementById('trivia-ui').classList.add('active');
+        }, 2000);
+    }
+});
+
 // 6. Bucle de Animación
 function animate() {
     requestAnimationFrame(animate);
@@ -211,43 +244,43 @@ function animate() {
 
     let keepHover = false;
 
-    if (hoveredCard) {
-        // El hitbox invisible sigue a la carta seleccionada para dar un área de contacto estable
-        hoverHitbox.position.copy(hoveredCard.position);
-        hoverHitbox.rotation.z = hoveredCard.rotation.z;
-
-        // Comprobar colisión SÓLO contra el hitbox estable para evitar parpadeos
-        const hits = raycaster.intersectObject(hoverHitbox);
-        if (hits.length > 0) {
-            keepHover = true;
-        } else {
-            hoveredCard = null;
-        }
-    }
-
-    if (!keepHover) {
-        // Si no estamos manteniendo un hover, buscamos una carta nueva
-        const intersects = raycaster.intersectObjects(cards);
-        if (intersects.length > 0) {
-            hoveredCard = intersects[0].object;
-            targetGlobalSpeed = 0.0;
-            
-            // Colocar hitbox de inmediato
+    if (gameState === 'floating') {
+        if (hoveredCard) {
             hoverHitbox.position.copy(hoveredCard.position);
             hoverHitbox.rotation.z = hoveredCard.rotation.z;
-            
-            // Preparar el botón
-            btnGroup.visible = true;
-            btnGroup.position.copy(hoverHitbox.position);
-            btnGroup.position.y -= 5; // Abajo de la hitbox
-            btnGroup.position.z += 0.1;
-            btnGroup.rotation.z = 0; // Mostrar horizontal
+
+            const hits = raycaster.intersectObject(hoverHitbox);
+            if (hits.length > 0) {
+                keepHover = true;
+            } else {
+                hoveredCard = null;
+            }
+        }
+
+        if (!keepHover) {
+            const intersects = raycaster.intersectObjects(cards);
+            if (intersects.length > 0) {
+                hoveredCard = intersects[0].object;
+                targetGlobalSpeed = 0.0;
+                
+                hoverHitbox.position.copy(hoveredCard.position);
+                hoverHitbox.rotation.z = hoveredCard.rotation.z;
+                
+                btnGroup.visible = true;
+                btnGroup.position.copy(hoverHitbox.position);
+                btnGroup.position.y -= 5;
+                btnGroup.position.z += 0.1;
+                btnGroup.rotation.z = 0;
+            } else {
+                hoveredCard = null;
+                targetGlobalSpeed = 1.0;
+            }
         } else {
-            hoveredCard = null;
-            targetGlobalSpeed = 1.0;
+            targetGlobalSpeed = 0.0;
         }
     } else {
-        // Mantener velocidad en 0 mientras el hitbox siga tocado
+        hoveredCard = null;
+        if (btnGroup) btnGroup.visible = false;
         targetGlobalSpeed = 0.0;
     }
 
@@ -284,24 +317,43 @@ function animate() {
         const card = cards[i];
         const data = card.userData;
 
-        // Movimiento afectado por pausa
-        card.position.x += data.velX * globalSpeedMultiplier;
-        card.position.y += data.velY * globalSpeedMultiplier;
-        card.position.z += data.velZ * globalSpeedMultiplier;
+        if (gameState === 'floating') {
+            card.position.x += data.velX * globalSpeedMultiplier;
+            card.position.y += data.velY * globalSpeedMultiplier;
+            card.position.z += data.velZ * globalSpeedMultiplier;
 
-        data.baseRotX += data.rotX * globalSpeedMultiplier;
-        data.baseRotY += data.rotY * globalSpeedMultiplier;
-        data.baseRotZ += data.rotZ * globalSpeedMultiplier;
+            data.baseRotX += data.rotX * globalSpeedMultiplier;
+            data.baseRotY += data.rotY * globalSpeedMultiplier;
+            data.baseRotZ += data.rotZ * globalSpeedMultiplier;
 
-        // Giro hacia posición estándar de reverso si está hovered
-        if (card === hoveredCard) {
-            card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, 0, 0.1);
-            card.rotation.y = THREE.MathUtils.lerp(card.rotation.y, Math.PI, 0.1);
-            card.rotation.z = THREE.MathUtils.lerp(card.rotation.z, 0, 0.1);
+            if (card === hoveredCard) {
+                card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, 0, 0.1);
+                card.rotation.y = THREE.MathUtils.lerp(card.rotation.y, Math.PI, 0.1);
+                card.rotation.z = THREE.MathUtils.lerp(card.rotation.z, 0, 0.1);
+            } else {
+                card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, data.baseRotX, 0.1);
+                card.rotation.y = THREE.MathUtils.lerp(card.rotation.y, data.baseRotY, 0.1);
+                card.rotation.z = THREE.MathUtils.lerp(card.rotation.z, data.baseRotZ, 0.1);
+            }
         } else {
-            card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, data.baseRotX, 0.1);
-            card.rotation.y = THREE.MathUtils.lerp(card.rotation.y, data.baseRotY, 0.1);
-            card.rotation.z = THREE.MathUtils.lerp(card.rotation.z, data.baseRotZ, 0.1);
+            if (card === selectedCard) {
+                // Interpolación suave hacia la izquierda (dura ~2 segundos)
+                card.position.x = THREE.MathUtils.lerp(card.position.x, data.targetPosX, 0.02);
+                card.position.y = THREE.MathUtils.lerp(card.position.y, data.targetPosY, 0.02);
+                card.position.z = THREE.MathUtils.lerp(card.position.z, data.targetPosZ, 0.02);
+                
+                card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, 0, 0.02);
+                card.rotation.y = THREE.MathUtils.lerp(card.rotation.y, data.targetRotY, 0.02);
+                card.rotation.z = THREE.MathUtils.lerp(card.rotation.z, 0, 0.02);
+            } else {
+                // Las demás cartas continúan un movimiento lento mientras se desvanecen
+                card.position.x += data.velX * 0.2;
+                card.position.y += data.velY * 0.2;
+                card.position.z += data.velZ * 0.2;
+                card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, data.baseRotX, 0.1);
+                card.rotation.y = THREE.MathUtils.lerp(card.rotation.y, data.baseRotY, 0.1);
+                card.rotation.z = THREE.MathUtils.lerp(card.rotation.z, data.baseRotZ, 0.1);
+            }
         }
 
         // Fade-In y Fade-Out
@@ -312,6 +364,14 @@ function animate() {
             if (data.opacity >= 1.0) {
                 data.opacity = 1.0;
                 data.state = 'traveling';
+            }
+        } else if (data.state === 'fadeOut') {
+            data.opacity -= 0.015; // Suave fade out (~2 segundos)
+            if (data.opacity <= 0) {
+                card.material.forEach(mat => mat.dispose());
+                scene.remove(card); 
+                cards.splice(i, 1); 
+                continue; 
             }
         } else if (distanceFromCenter > 20 || card.position.z > 3) {
             data.opacity -= 0.03 * globalSpeedMultiplier; 
@@ -333,9 +393,123 @@ function animate() {
 
 animate();
 
+// --- Visualizador 3D Secundario (Trivia) ---
+const viewerContainer = document.getElementById('model-viewer');
+const viewerScene = new THREE.Scene();
+const viewerCamera = new THREE.PerspectiveCamera(50, viewerContainer.clientWidth / viewerContainer.clientHeight, 0.1, 100);
+viewerCamera.position.z = 5;
+
+const viewerRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+viewerRenderer.setSize(viewerContainer.clientWidth, viewerContainer.clientHeight);
+viewerContainer.appendChild(viewerRenderer.domElement);
+
+const viewerLight = new THREE.DirectionalLight(0xffffff, 1.5);
+viewerLight.position.set(2, 2, 5);
+viewerScene.add(viewerLight);
+viewerScene.add(new THREE.AmbientLight(0xffffff, 1.0));
+
+// Objeto de prueba (hasta que se importe uno de Blender)
+const testGeometry = new THREE.TorusKnotGeometry(0.8, 0.3, 100, 16);
+const testMaterial = new THREE.MeshStandardMaterial({ color: 0x55ff55, metalness: 0.5, roughness: 0.2 });
+const testMesh = new THREE.Mesh(testGeometry, testMaterial);
+viewerScene.add(testMesh);
+
+/*
+// INSTRUCCIONES PARA BLENDER:
+// 1. Importa GLTFLoader al inicio del archivo:
+// import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+// 2. Crea una instancia del loader:
+// const gltfLoader = new GLTFLoader();
+// 3. Usa la función para cargar tu modelo y reemplazar 'testMesh':
+// gltfLoader.load('assets/tu_modelo.glb', (gltf) => {
+//     const modelo = gltf.scene;
+//     // Ajusta la escala y posición del modelo si es necesario:
+//     modelo.scale.set(1, 1, 1);
+//     modelo.position.set(0, 0, 0);
+//     viewerScene.remove(testMesh);
+//     testMesh = modelo; // Reasignar referencia para interactuar
+//     viewerScene.add(modelo);
+// });
+*/
+
+// Interacción del visor 3D
+let isDragging = false;
+let previousMousePosition = { x: 0, y: 0 };
+
+viewerContainer.addEventListener('mousedown', (e) => {
+    isDragging = true;
+});
+
+window.addEventListener('mouseup', () => {
+    isDragging = false;
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (isDragging && gameState === 'trivia') {
+        const deltaMove = {
+            x: e.offsetX - previousMousePosition.x,
+            y: e.offsetY - previousMousePosition.y
+        };
+        
+        testMesh.rotation.y += deltaMove.x * 0.01;
+        testMesh.rotation.x += deltaMove.y * 0.01;
+    }
+    previousMousePosition = { x: e.offsetX, y: e.offsetY };
+});
+
+function animateViewer() {
+    requestAnimationFrame(animateViewer);
+    if (gameState === 'trivia') {
+        if (!isDragging) {
+            // Rotación constante a la izquierda
+            testMesh.rotation.y -= 0.01;
+            // Retorno a rotación vertical base (X y Z = 0)
+            testMesh.rotation.x = THREE.MathUtils.lerp(testMesh.rotation.x, 0, 0.05);
+            testMesh.rotation.z = THREE.MathUtils.lerp(testMesh.rotation.z, 0, 0.05);
+        }
+        viewerRenderer.render(viewerScene, viewerCamera);
+    }
+}
+animateViewer();
+
+
 // 7. Tamaño responsivo
 window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+});
+
+// 8. Orquestación de Animación de Introducción
+window.addEventListener('DOMContentLoaded', () => {
+    const logoWrapper = document.querySelector('.logo-wrapper');
+    const subtitleWrapper = document.querySelector('.subtitle-wrapper');
+    const mainContent = document.getElementById('main-content');
+    const introScreen = document.getElementById('intro-screen');
+
+    // 1. Inicia animación del logo (0.8s)
+    setTimeout(() => {
+        logoWrapper.classList.add('animate');
+    }, 100);
+
+    // 2. Inicia animación del ícono justo al terminar el logo
+    setTimeout(() => {
+        subtitleWrapper.classList.add('animate-icon');
+    }, 900); // 100 + 800ms
+
+    // 3. Inicia revelado del subtítulo (1s) al terminar el ícono
+    setTimeout(() => {
+        subtitleWrapper.classList.add('animate-text');
+    }, 1700); // 900 + 800ms
+
+    // 4. Transición de círculo revelando pantalla principal
+    setTimeout(() => {
+        mainContent.classList.add('reveal');
+    }, 2800); // 1700 + 1000ms + 100ms pausa
+
+    // 5. Limpieza del DOM tras la transición
+    setTimeout(() => {
+        if (introScreen) introScreen.remove();
+        mainContent.style.clipPath = 'none'; // Mejora de rendimiento
+    }, 3400); // 2800 + 500ms + 100ms
 });
