@@ -15,6 +15,10 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
 directionalLight.position.set(0, 0, 10);
 scene.add(directionalLight);
 
+const backLight = new THREE.DirectionalLight(0xffffff, 1.5);
+backLight.position.set(0, 0, -10);
+scene.add(backLight);
+
 const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
 scene.add(ambientLight);
 
@@ -29,10 +33,10 @@ const frontTexture = textureLoader.load('assets/cartas/conrev.png');
 
 // Precargar las 32 texturas posibles para los reversos
 const backTextures = [];
-for (let i = 1; i <= 32; i++) {
+for (let i = 1; i <= 12; i++) {
     // Aquí puedes cambiar a tus archivos locales, por ejemplo:
     // const url = `assets/cartas/reversos/${i}.png`;
-    const url = `https://picsum.photos/seed/${i + 100}/400/600`; // Imágenes de prueba distintas
+    const url = `assets/cartas/contexto/${i}.png`;
     backTextures.push(textureLoader.load(url));
 }
 
@@ -49,11 +53,13 @@ const baseMaterials = [
     new THREE.MeshStandardMaterial({ color: 0x222222, transparent: true }), // Borde superior
     new THREE.MeshStandardMaterial({ color: 0x222222, transparent: true }), // Borde inferior
     new THREE.MeshStandardMaterial({ map: frontTexture, transparent: true }), // Cara FRONTAL
-    new THREE.MeshStandardMaterial({ color: 0x222222, transparent: true })    // Cara TRASERA (Placeholder)
+    new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true })    // Cara TRASERA (Placeholder)
 ];
 
 // Función que "crea" una nueva carta
 function createCard() {
+    if (hoveredCard) return; // Pausar generación en hover
+
     // Clonamos materiales para opacidad independiente
     const uniqueMaterials = baseMaterials.map(mat => mat.clone());
     
@@ -109,14 +115,14 @@ card.position.set(
 }
 
 // Generar carta cada 250ms
-let cardInterval = setInterval(createCard, 1000);
+let cardInterval = setInterval(createCard, 800);
 
 // Evitar acumulación de elementos al minimizar la ventana
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         clearInterval(cardInterval); // Pausar generación
     } else {
-        cardInterval = setInterval(createCard, 250); // Reanudar
+        cardInterval = setInterval(createCard, 1000); // Reanudar con el intervalo original
     }
 });
 
@@ -134,14 +140,38 @@ const hoverHitbox = new THREE.Mesh(hoverHitboxGeometry, hoverHitboxMaterial);
 scene.add(hoverHitbox);
 
 // Variables configurables del botón
-const btnInitialColor = 0xff5555; // Color inicial (durante animación de apertura)
-const btnFinalColor = 0x55ff55;   // Color final (completamente abierto)
-const btnTextColor = '#ffffff';   // Color del texto
+const btnInitialColor = '#000000'; // Color inicial (durante animación de apertura)
+const btnFinalColor = '#ffffff';   // Color final (completamente abierto)
+const btnTextColor = '#000000';   // Color del texto
+
+const colorInitial = new THREE.Color(btnInitialColor);
+const colorFinal = new THREE.Color(btnFinalColor);
 
 const btnGroup = new THREE.Group();
 
-// Fondo del botón
-const btnBgGeometry = new THREE.PlaneGeometry(5, 2);
+// Función para crear un Shape con bordes redondeados
+function createRoundedRectShape(width, height, radius) {
+    const shape = new THREE.Shape();
+    const x = -width / 2;
+    const y = -height / 2;
+    shape.moveTo(x, y + radius);
+    shape.lineTo(x, y + height - radius);
+    shape.quadraticCurveTo(x, y + height, x + radius, y + height);
+    shape.lineTo(x + width - radius, y + height);
+    shape.quadraticCurveTo(x + width, y + height, x + width, y + height - radius);
+    shape.lineTo(x + width, y + radius);
+    shape.quadraticCurveTo(x + width, y, x + width - radius, y);
+    shape.lineTo(x + radius, y);
+    shape.quadraticCurveTo(x, y, x, y + radius);
+    return shape;
+}
+
+// Fondo del botón con bordes redondeados
+const btnWidth = 5;
+const btnHeight = 1.5;
+const btnRadius = 0.3; // Aprox 15px relativos al tamaño
+const btnBgShape = createRoundedRectShape(btnWidth, btnHeight, btnRadius);
+const btnBgGeometry = new THREE.ShapeGeometry(btnBgShape);
 const btnBgMaterial = new THREE.MeshBasicMaterial({ color: btnInitialColor, transparent: true });
 const btnBg = new THREE.Mesh(btnBgGeometry, btnBgMaterial);
 btnGroup.add(btnBg);
@@ -152,14 +182,15 @@ txtCanvas.width = 1024;
 txtCanvas.height = 409; // Ratio 5:2 para que no se deforme
 const txtCtx = txtCanvas.getContext('2d');
 txtCtx.fillStyle = btnTextColor ;
-txtCtx.font = 'bold 110px Arial';
+txtCtx.font = 'bold 160px Arial';
 txtCtx.textAlign = 'center';
 txtCtx.textBaseline = 'middle';
 // Simulamos el padding dibujando el texto en una zona más estrecha
 txtCtx.fillText('Seleccionar carta', 512, 204.5, 1024 * 0.6); 
 const txtTexture = new THREE.CanvasTexture(txtCanvas);
 const txtMaterial = new THREE.MeshBasicMaterial({ map: txtTexture, transparent: true, alphaTest: 0.1 });
-const txtMesh = new THREE.Mesh(btnBgGeometry, txtMaterial);
+const txtGeometry = new THREE.PlaneGeometry(btnWidth, btnHeight);
+const txtMesh = new THREE.Mesh(txtGeometry, txtMaterial);
 txtMesh.position.z = 0.01; // Ligeramente adelante
 btnGroup.add(txtMesh);
 
@@ -207,10 +238,10 @@ function animate() {
             
             // Preparar el botón
             btnGroup.visible = true;
-            btnGroup.position.copy(hoveredCard.position);
-            btnGroup.position.y -= 5; // Abajo de la carta
+            btnGroup.position.copy(hoverHitbox.position);
+            btnGroup.position.y -= 5; // Abajo de la hitbox
             btnGroup.position.z += 0.1;
-            btnGroup.rotation.z = hoveredCard.rotation.z;
+            btnGroup.rotation.z = 0; // Mostrar horizontal
         } else {
             hoveredCard = null;
             targetGlobalSpeed = 1.0;
@@ -229,21 +260,24 @@ function animate() {
 
     // Animación del botón y sus colores
     if (hoveredCard) {
-        if (btnGroup.scale.x < 1) {
-            btnGroup.scale.x += 0.06; // Apertura
-            btnBgMaterial.color.setHex(btnInitialColor);
-        } else {
-            btnGroup.scale.x = 1;
-            btnBgMaterial.color.setHex(btnFinalColor); // Cambia al color final cuando abre
-        }
+        // Asegurar que siga siempre a la hitbox
+        btnGroup.position.copy(hoverHitbox.position);
+        btnGroup.position.y -= 5;
+        btnGroup.position.z += 0.1;
+
+        // Apertura con easing suave
+        btnGroup.scale.x = THREE.MathUtils.lerp(btnGroup.scale.x, 1, 0.15);
+        if (btnGroup.scale.x > 0.99) btnGroup.scale.x = 1;
+        
+        btnBgMaterial.color.lerp(colorFinal, 0.1); // Transición de color suave
     } else {
-        if (btnGroup.scale.x > 0) {
-            btnGroup.scale.x -= 0.06; // Cierre inverso
-            btnBgMaterial.color.setHex(btnInitialColor); // Vuelve al color inicial
-        } else {
+        // Cierre inverso con easing suave
+        btnGroup.scale.x = THREE.MathUtils.lerp(btnGroup.scale.x, 0, 0.15);
+        if (btnGroup.scale.x < 0.01) {
             btnGroup.scale.x = 0;
             btnGroup.visible = false;
         }
+        btnBgMaterial.color.lerp(colorInitial, 0.2); // Regreso al color inicial
     }
 
     for (let i = cards.length - 1; i >= 0; i--) {

@@ -1,7 +1,8 @@
 body {
     margin: 0;
     overflow: hidden; /* Evita que aparezcan barras de desplazamiento */
-    background-color: #7c7869; /* Fondo gris oscuro */
+    background-image: url('assets/paleta 2.png');
+    background-size: cover;
 }
 
 canvas {
