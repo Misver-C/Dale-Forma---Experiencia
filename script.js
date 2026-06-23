@@ -195,7 +195,7 @@ function draw() {
         ctx.save();
         ctx.beginPath();
         // Se agranda ligeramente si está interactuada
-        const currentRadius = isHovered ? star.radius * 2 : star.radius;
+        const currentRadius = isHovered ? star.radius * 4 : star.radius;
         ctx.arc(star.x, star.y, currentRadius, 0, Math.PI * 2);
         
         ctx.fillStyle = isHovered ? '#ffffff' : 'rgba(255, 255, 255, 0.6)';
