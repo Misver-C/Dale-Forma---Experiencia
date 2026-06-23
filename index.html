@@ -3,41 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dale Forma - Exploración</title>
+    <title>Constelaciones Interactivas</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="intro-screen">
-        <div class="logo-wrapper">
-            <div class="dale-container"><img src="assets/intro/dale.png" alt="dale"></div>
-            <div class="forma-container"><img src="assets/intro/forma.png" alt="forma"></div>
-        </div>
-        <div class="subtitle-wrapper">
-            <div class="icon-container"><img src="assets/piezas/rojo1.png" alt="rojo"></div>
-            <div class="text-container">
-                <span class="subtitle-text">¡Selecciona una carta, adivina correctamente y junta la palabra!</span>
-            </div>
-        </div>
-    </div>
-    <div id="main-content">
-        <!-- Canvas will be appended here -->
-        <div id="trivia-bg"></div>
-    </div>
-    
-    <!-- Trivia Mode Elements -->
-    <div id="trivia-ui">
-        <h2 class="trivia-title">¿A qué concepto pertenece esta figura?</h2>
-        <div class="trivia-box">
-            <div id="model-viewer">
-                <!-- 3D Object canvas will be appended here -->
-            </div>
-            <div class="trivia-buttons">
-                <button class="trivia-btn left">Concepto 1</button>
-                <button class="trivia-btn right">Concepto 2</button>
-            </div>
-        </div>
-    </div>
-
-    <script type="module" src="script.js"></script>
+    <canvas id="sky-canvas"></canvas>
+    <script src="script.js"></script>
 </body>
 </html>
