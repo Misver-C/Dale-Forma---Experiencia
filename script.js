@@ -75,9 +75,19 @@ let visibleInventory = [];
 let finalMassHull = []; 
 let lastFrameTime = 0;
 let globalRotationAngle = 0;
-let globalRotationSpeed = 1.5; // Radianes por segundo
+let globalRotationSpeed = 1.5; 
 
-// Algoritmo Convex Hull
+// Variables Fase 4 y 5
+let phase4ClickCount = 0;
+let phase4ShakeEndTime = 0;
+let draggedShape = null;
+let preChaosStartTime = 0;
+let scrollHistory = [];
+let arrowOffset = 0;
+let arrowCinematicScroll = 0;
+let phase5StartTime = 0;
+let phase5FillStartTime = 0;
+
 function getConvexHull(points) {
     if (points.length <= 3) return points;
     let sorted = [...points].sort((a, b) => a.x !== b.x ? a.x - b.x : a.y - b.y);
@@ -139,7 +149,7 @@ function generateStars() {
             }
         }
         if (valid) {
-            let r = Math.random() * 2.5 + 2; 
+            let r = Math.random() * 2.5 + 2.0; 
             stars.push({
                 x: x, y: y, baseX: x, baseY: y,
                 radius: r, renderRadius: r, 
@@ -209,9 +219,10 @@ function triggerArrowEvent() {
 }
 
 window.addEventListener('mousemove', (e) => {
-    if (gameState !== "normal") return;
     mouse.x = e.clientX;
     mouse.y = e.clientY;
+    
+    if (gameState !== "normal") return;
     if (isMouseDown && currentPath.length > 0) {
         let nearest = getNearestStar(mouse.x, mouse.y, HOVER_DISTANCE_PX);
         if (nearest) {
@@ -228,31 +239,84 @@ window.addEventListener('mousemove', (e) => {
         hoveredStar = getNearestStar(mouse.x, mouse.y, HOVER_DISTANCE_PX);
     }
 });
+
 window.addEventListener('mousedown', (e) => {
-    if (gameState !== "normal") return; 
     isMouseDown = true;
-    if (hoveredStar) currentPath = [hoveredStar];
-    else currentPath = [];
+    
+    if (gameState === "normal") {
+        if (hoveredStar) currentPath = [hoveredStar];
+        else currentPath = [];
+    } else if (gameState === "phase4_waiting") {
+        const dist = Math.hypot(mouse.x - width/2, mouse.y - height/2);
+        if (dist < 12 * emSize) { 
+            phase4ClickCount++;
+            phase4ShakeEndTime = performance.now() + 150;
+            if (phase4ClickCount >= 4) {
+                gameState = "phase4_pre_chaos";
+                preChaosStartTime = performance.now();
+            }
+        }
+    } else if (gameState === "phase4_chaos" || gameState === "phase4_dragging" || gameState === "phase4_dropping" || gameState === "phase5_interact") {
+        for (let i = visibleInventory.length - 1; i >= 0; i--) { 
+            let shape = visibleInventory[i];
+            if (shape.state === "chaos" || shape.state === "dropping" || shape.state === "locked") {
+                if (Math.hypot(mouse.x - shape.centerX, mouse.y - shape.centerY) < shape.radius * 2.0) {
+                    shape.state = "dragging";
+                    draggedShape = shape;
+                    if (gameState.startsWith("phase4_")) {
+                        gameState = "phase4_dragging";
+                    }
+                    break;
+                }
+            }
+        }
+    }
 });
+
 window.addEventListener('mouseup', () => {
-    if (gameState !== "normal") return;
-    isMouseDown = false; currentPath = []; isLimitWarning = false;
+    isMouseDown = false; 
+    currentPath = []; 
+    isLimitWarning = false;
     hoveredStar = getNearestStar(mouse.x, mouse.y, HOVER_DISTANCE_PX); 
+    
+    if (draggedShape) {
+        if (gameState === "phase5_interact") {
+            let dist = Math.hypot(mouse.x - draggedShape.socketTargetX, mouse.y - draggedShape.socketTargetY);
+            if (dist < 6 * emSize) {
+                draggedShape.state = "snapping";
+            } else {
+                draggedShape.state = "dropping";
+            }
+        } else {
+            draggedShape.state = "dropping";
+            let anyDragging = visibleInventory.some(s => s.state === "dragging");
+            if (!anyDragging) gameState = "phase4_chaos";
+        }
+        draggedShape = null;
+    }
 });
 
 window.addEventListener('wheel', (e) => {
     if (gameState === "arrow_ready") {
-        if (e.deltaY > 0) { 
-            globalScrollY += 30; 
-            const now = performance.now();
-            if (now - lastScrollTime <= 1300) scrollCount++;
-            else scrollCount = 1;
-            lastScrollTime = now;
-            if (scrollCount >= 3) {
-                gameState = "fast_falling";
-                fastFallingStartTime = performance.now();
-                scrollCount = 0;
-            }
+        if (e.deltaY <= 0) return; // Desactivar scroll hacia arriba
+        
+        globalScrollY += e.deltaY;
+        if (globalScrollY < 0) globalScrollY = 0;
+        
+        // Empuje elástico hacia arriba (si el delta es positivo, la flecha sube = offset negativo)
+        arrowOffset -= e.deltaY * 0.2;
+        if (arrowOffset < -300) arrowOffset = -300;
+        if (arrowOffset > 300) arrowOffset = 300;
+        
+        const now = performance.now();
+        scrollHistory.push({ time: now, delta: Math.abs(e.deltaY) });
+        scrollHistory = scrollHistory.filter(evt => now - evt.time <= 1300);
+        let recentScroll = scrollHistory.reduce((sum, evt) => sum + evt.delta, 0);
+        
+        if (recentScroll >= 2000) {
+            gameState = "fast_falling";
+            fastFallingStartTime = performance.now();
+            scrollHistory = [];
         }
     }
 });
@@ -289,30 +353,36 @@ function draw() {
     if (lastFrameTime > 0) timeDelta = (now - lastFrameTime) / 1000;
     lastFrameTime = now;
     
+    // Transición independiente del fondo blanco (2.5s)
+    if (fastFallingStartTime > 0) {
+        let wElapsed = (now - fastFallingStartTime) / 1000;
+        whiteOpacity = Math.min(1, wElapsed / 2.5);
+    }
+    
     // Damping Global
     let damping = 1.0;
     if (gameState === "fading_lines" || gameState === "drawing_hull" || gameState === "phase3_solid") {
         let dampingElapsed = (now - fadingStartTime) / 1000;
         let linearDamping = 1.0 - (dampingElapsed / 3.0);
         if (linearDamping < 0) linearDamping = 0;
-        // Ease-out cúbico para asegurar que se detenga aterizando a 0 velocidad
         damping = linearDamping * linearDamping * linearDamping;
+    } else if (gameState === "phase4_waiting" || gameState === "phase4_pre_chaos") {
+        damping = 0.0; 
     }
     
-    // Incremento de la rotación global de la masa afectada por el damping
+    // Rotación Global controlada por damping
     if (gameState === "fading_lines" || gameState === "drawing_hull" || gameState === "phase3_solid") {
         globalRotationAngle += globalRotationSpeed * damping * timeDelta;
     }
     
-    // Lógica Máquina de Estados
+    // Lógica Máquina de Estados principal
     if (gameState === "arrow_ready") {
-        globalScrollY += (0 - globalScrollY) * 0.05;
+        arrowOffset += (0 - arrowOffset) * 0.05; // Recuperación elástica hacia el centro
     } else if (gameState === "fast_falling") {
-        globalScrollY += 60; 
+        globalScrollY += 60; arrowCinematicScroll += 60;
         const elapsed = (now - fastFallingStartTime) / 1000;
-        whiteOpacity = Math.min(1, elapsed / 4.0); 
         
-        if (elapsed >= 4.0) {
+        if (elapsed >= 1.5) { // Aparecen formas ANTES del fondo 100% blanco
             gameState = "holding_shapes";
             holdingStartTime = performance.now();
             
@@ -343,7 +413,7 @@ function draw() {
                     wobbleSpeedY: Math.random() * 3 + 2,
                     wobbleOffsetX: Math.random() * Math.PI * 2,
                     initialAngle: Math.random() * Math.PI * 2,
-                    rotationSpeed: (Math.random() - 0.5) * 3, // Radianes por seg
+                    rotationSpeed: (Math.random() - 0.5) * 3, 
                     vertices: shape.vertices.map(v => {
                         let relX = (v.x - centerX) * shapeScale;
                         let relY = (v.y - centerY) * shapeScale;
@@ -359,14 +429,14 @@ function draw() {
             });
         }
     } else if (gameState === "holding_shapes") {
-        globalScrollY += 60; 
+        globalScrollY += 60; arrowCinematicScroll += 60;
         const elapsed = (now - holdingStartTime) / 1000;
         if (elapsed >= 3.0) {
             gameState = "merging";
             mergingStartTime = performance.now();
         }
     } else if (gameState === "merging") {
-        globalScrollY += 60;
+        globalScrollY += 60; arrowCinematicScroll += 60;
         const elapsed = (now - mergingStartTime) / 1000;
         if (elapsed >= 2.0) { 
             gameState = "fading_lines"; 
@@ -388,27 +458,55 @@ function draw() {
             finalMassHull = getConvexHull(allMergedVertices);
         }
     } else if (gameState === "fading_lines") {
-        globalScrollY += 60;
+        globalScrollY += 60; arrowCinematicScroll += 60;
         const elapsed = (now - fadingStartTime) / 1000;
         if (elapsed >= 1.5) { 
             gameState = "drawing_hull";
             drawingHullStartTime = performance.now();
         }
     } else if (gameState === "drawing_hull") {
-        globalScrollY += 60;
+        globalScrollY += 60; arrowCinematicScroll += 60;
         const elapsed = (now - drawingHullStartTime) / 1000;
         if (elapsed >= 0.5) { 
             gameState = "phase3_solid"; 
         }
     } else if (gameState === "phase3_solid") {
-        globalScrollY += 60;
+        globalScrollY += 60; arrowCinematicScroll += 60;
+        const elapsed = (now - fadingStartTime) / 1000;
+        if (elapsed >= 3.0) {
+            gameState = "phase4_waiting";
+            phase4ClickCount = 0;
+            phase4ShakeEndTime = 0;
+        }
+    } else if (gameState === "phase4_pre_chaos") {
+        globalScrollY += 60; arrowCinematicScroll += 60;
+        const elapsed = (now - preChaosStartTime) / 1000;
+        if (elapsed >= 0.3) {
+            gameState = "phase4_chaos";
+            for (let shape of visibleInventory) {
+                shape.state = "chaos";
+                shape.centerX = width/2;
+                shape.centerY = height/2;
+                shape.vx = (Math.random() - 0.5) * 32; 
+                shape.vy = (Math.random() - 0.5) * 32;
+                shape.radius = 4 * emSize; 
+                shape.angle = shape.initialAngle + globalRotationAngle;
+            }
+        }
+    } else if (gameState.startsWith("phase4_") || gameState.startsWith("phase5_")) {
+        globalScrollY += 60; arrowCinematicScroll += 60;
     }
     
-    // Render base
-    ctx.clearRect(0, 0, width, height);
-    if (whiteOpacity > 0) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${whiteOpacity})`;
+    // Render base con Motion Blur en Fase 4 Caos y Fase 5
+    if ((gameState.startsWith("phase4_") || gameState.startsWith("phase5_")) && gameState !== "phase4_waiting" && gameState !== "phase4_pre_chaos") {
+        ctx.fillStyle = `rgba(255, 255, 255, 0.65)`; // Efecto rastro menos denso (se borra más rápido)
         ctx.fillRect(0, 0, width, height);
+    } else {
+        ctx.clearRect(0, 0, width, height);
+        if (whiteOpacity > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${whiteOpacity})`;
+            ctx.fillRect(0, 0, width, height);
+        }
     }
     
     // Hover y Trazado (Fase 1)
@@ -459,7 +557,7 @@ function draw() {
         p.x += p.vx; p.y += p.vy; p.life -= p.decay;
         if (p.life <= 0) { particles.splice(i, 1); continue; }
         ctx.save();
-        ctx.globalAlpha = Math.max(0, p.life); ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
+        ctx.globalAlpha = Math.max(0, p.life); ctx.shadowBlur = 5; ctx.shadowColor = '#ffcc00';
         if (p.img && p.img.complete) ctx.drawImage(p.img, p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
         ctx.restore();
     }
@@ -473,12 +571,39 @@ function draw() {
         if (gameState !== "normal") {
             if (star.isArrowPart) {
                 star.x += (star.targetX - star.x) * 0.05; star.y += (star.targetY - star.y) * 0.05;
-                targetRadius = star.radius * 1.5; finalY = star.y - globalScrollY * 0.1;
+                targetRadius = star.radius * 1.5; 
+                finalY = star.y - arrowCinematicScroll * 0.1 + arrowOffset;
             } else if (star.isBackground) {
                 star.x += (star.baseX - star.x) * 0.1; star.y += (star.baseY - star.y) * 0.1;
-                targetRadius = star.radius * 0.2; finalY = star.y - globalScrollY * 0.7;
+                targetRadius = star.radius * 0.4; 
+                let parallaxSpeed = star.radius * 0.2; 
+                finalY = star.y - globalScrollY * parallaxSpeed;
             }
             star.renderRadius += (targetRadius - star.renderRadius) * 0.015;
+            
+            // Loop infinito de estrellas bidireccional
+            if (finalY < -50) {
+                if (!star.isArrowPart) {
+                    star.baseY += height + 100;
+                    star.y += height + 100;
+                    star.baseX = Math.random() * width;
+                    star.x = star.baseX;
+                    continue; 
+                }
+            } else if (finalY > height + 50) {
+                if (!star.isArrowPart) {
+                    star.baseY -= height + 100;
+                    star.y -= height + 100;
+                    star.baseX = Math.random() * width;
+                    star.x = star.baseX;
+                    continue; 
+                }
+            }
+            
+            if (star.isArrowPart && (gameState.startsWith("phase4_") || gameState.startsWith("phase5_")) && (finalY < -50 || finalY > height + 50)) {
+                // Limpiar flecha al final
+                continue;
+            }
         } else {
             const distToMouse = Math.sqrt(Math.pow(mouse.x - star.baseX, 2) + Math.pow(mouse.y - star.baseY, 2));
             isHovered = (star === hoveredStar || currentPath.includes(star));
@@ -491,8 +616,6 @@ function draw() {
             star.renderRadius += (targetRadius - star.renderRadius) * 0.2;
         }
         
-        if (finalY < -50 || finalY > height + 50) continue;
-
         ctx.save();
         ctx.beginPath();
         ctx.arc(star.x, finalY, Math.max(0, star.renderRadius), 0, Math.PI * 2);
@@ -532,13 +655,12 @@ function draw() {
         }
     }
 
-    // Dibujar formas individuales con ROTACIÓN
-    if (visibleInventory.length > 0 && gameState !== "phase3_solid") {
+    // Dibujar formas individuales con ROTACIÓN (Fase 2 y Fading)
+    if (visibleInventory.length > 0 && gameState !== "phase3_solid" && gameState !== "phase4_waiting" && !gameState.startsWith("phase4_") && !gameState.startsWith("phase5_")) {
         for (let shape of visibleInventory) {
             let wobbleX = 0; let wobbleY = 0;
             const tSec = now / 1000;
             
-            // Lógica Wobble individual vs Global
             if (gameState === "holding_shapes" || gameState === "merging") {
                 wobbleX = Math.sin(tSec * shape.wobbleSpeedX + shape.wobbleOffsetX) * (1 * emSize);
                 wobbleY = Math.cos(tSec * shape.wobbleSpeedY) * (3 * emSize);
@@ -549,17 +671,14 @@ function draw() {
             
             let angle = shape.initialAngle + shape.rotationSpeed * tSec;
             if (gameState === "fading_lines" || gameState === "drawing_hull") {
-                // Durante la fase estática, usamos el ángulo global sincronizado
                 angle = shape.initialAngle + shape.rotationSpeed * (mergingStartTime + 2000)/1000 + globalRotationAngle;
             }
             
             let cosA = Math.cos(angle);
             let sinA = Math.sin(angle);
             
-            // Calculamos currentX, Y basándonos en la rotación
             for (let j = 0; j < shape.vertices.length; j++) {
                 let v = shape.vertices[j];
-                
                 let rotX = v.relX * cosA - v.relY * sinA;
                 let rotY = v.relX * sinA + v.relY * cosA;
                 
@@ -571,7 +690,6 @@ function draw() {
                     let progress = elapsedM / 2.0;
                     if (progress > 1) progress = 1;
                     
-                    // Curva Ease-In-Out para iniciar sin salto y acelerar
                     let tSmooth = progress < 0.5 
                         ? 4 * progress * progress * progress 
                         : 1 - Math.pow(-2 * progress + 2, 3) / 2;
@@ -581,7 +699,6 @@ function draw() {
                     
                     let centerDestX = blendedTargetX + rotX; 
                     let centerDestY = blendedTargetY + rotY;
-                    // Mantenemos el factor de LERP local (0.05) para no alterar la física
                     v.currentX += (centerDestX + wobbleX - v.currentX) * 0.05;
                     v.currentY += (centerDestY + wobbleY - v.currentY) * 0.05;
                 } else if (gameState === "fading_lines" || gameState === "drawing_hull") {
@@ -621,7 +738,6 @@ function draw() {
                 ctx.fill(); ctx.stroke(); ctx.restore();
             }
 
-            // Vértices puros (estrellas base) visibles siempre
             if (gameState === "fading_lines" || gameState === "drawing_hull") {
                 ctx.save();
                 for (let j = 0; j < shape.vertices.length; j++) {
@@ -636,7 +752,7 @@ function draw() {
         }
     }
 
-    // Estelas (Con decaimiento de emision)
+    // Estelas (Caos a la inversa)
     let emitChance = 0.6 * damping;
     if (gameState === "holding_shapes" || gameState === "merging") {
         for (let shape of visibleInventory) {
@@ -669,7 +785,7 @@ function draw() {
         ctx.restore();
     }
 
-    // Contorno del Convex Hull trazándose progresivamente
+    // Trazado progresivo del Hull
     if (gameState === "drawing_hull") {
         const elapsed = (now - drawingHullStartTime) / 1000;
         let progress = elapsed / 0.5;
@@ -689,8 +805,6 @@ function draw() {
 
         for (let j = 0; j <= pointsToDraw; j++) {
             let v = finalMassHull[j % totalPoints];
-            
-            // Rotación global sobre el hull
             let rotX = v.x * cosA - v.y * sinA;
             let rotY = v.x * sinA + v.y * cosA;
 
@@ -705,11 +819,17 @@ function draw() {
         ctx.restore();
     }
     
-    // Masa única sólida total (rotando)
-    if (gameState === "phase3_solid") {
+    // Masa única sólida o esperando clicks o pre_caos
+    if (gameState === "phase3_solid" || gameState === "phase4_waiting" || gameState === "phase4_pre_chaos") {
         const tSec = now / 1000;
         let globalWobbleX = Math.sin(tSec * 2) * (1.5 * emSize) * damping;
         let globalWobbleY = Math.cos(tSec * 3) * (3.5 * emSize) * damping;
+        
+        let hitShakeX = 0; let hitShakeY = 0;
+        if (gameState === "phase4_waiting" && now < phase4ShakeEndTime) {
+            hitShakeX = (Math.random() - 0.5) * 15;
+            hitShakeY = (Math.random() - 0.5) * 15;
+        }
         
         ctx.save();
         ctx.beginPath();
@@ -721,8 +841,8 @@ function draw() {
             let rotX = v.x * cosA - v.y * sinA;
             let rotY = v.x * sinA + v.y * cosA;
 
-            let drawX = (width/2) + rotX + globalWobbleX;
-            let drawY = (height/2) + rotY + globalWobbleY;
+            let drawX = (width/2) + rotX + globalWobbleX + hitShakeX;
+            let drawY = (height/2) + rotY + globalWobbleY + hitShakeY;
             if (j === 0) ctx.moveTo(drawX, drawY);
             else ctx.lineTo(drawX, drawY);
         }
@@ -731,9 +851,309 @@ function draw() {
         ctx.fillStyle = `rgba(0, 0, 0, 0.5)`;
         ctx.strokeStyle = `rgba(0, 0, 0, 0.9)`;
         ctx.lineWidth = 2;
-        ctx.fill();
-        ctx.stroke();
+        
+        // Brillan si son golpeados
+        if (now < phase4ShakeEndTime) {
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'rgba(255, 0, 0, 0.8)';
+            ctx.strokeStyle = `rgba(255, 100, 100, 1)`;
+        }
+        
+        ctx.fill(); ctx.stroke();
+        
+        // Animación revelando vértices antes de la gran explosión
+        if (gameState === "phase4_pre_chaos") {
+            ctx.fillStyle = `rgba(255, 255, 255, 0.8)`; // Destello interno
+            ctx.fill();
+            
+            for (let shape of visibleInventory) {
+                // Rotación sincronizada internamente
+                let angle = shape.initialAngle + shape.rotationSpeed * (mergingStartTime + 2000)/1000 + globalRotationAngle;
+                let cA = Math.cos(angle);
+                let sA = Math.sin(angle);
+                
+                for(let v of shape.vertices) {
+                    let rotX = v.relX * cA - v.relY * sA;
+                    let rotY = v.relX * sA + v.relY * cA;
+                    let drawX = (width/2) + rotX;
+                    let drawY = (height/2) + rotY;
+                    
+                    ctx.beginPath();
+                    ctx.arc(drawX, drawY, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#000000';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffffff';
+                    ctx.fill();
+                }
+            }
+        }
+        
         ctx.restore();
+    }
+
+    // Fase 4 y 5 Caos y Físicas
+    if ((gameState.startsWith("phase4_") || gameState.startsWith("phase5_")) && gameState !== "phase4_waiting" && gameState !== "phase4_pre_chaos") {
+        const bottomRowY = height - 100;
+        const rowWidth = 30 * emSize;
+        const slotsCount = visibleInventory.length;
+        const startX = (width/2) - (rowWidth/2);
+        
+        // Transición automática a Fase 5
+        if (gameState === "phase4_chaos" || gameState === "phase4_dragging" || gameState === "phase4_dropping") {
+            let allLocked = visibleInventory.every(s => s.state === "locked");
+            if (allLocked && visibleInventory.length > 0) {
+                gameState = "phase5_drawing_sockets";
+                phase5StartTime = performance.now();
+                
+                const minX = 10 * emSize;
+                const maxX = width - 10 * emSize;
+                const minY = 10 * emSize;
+                const maxY = bottomRowY - 7 * emSize;
+                const usableWidth = maxX - minX;
+                const usableHeight = maxY - minY;
+                
+                if (slotsCount < 4) {
+                    const spacing = usableWidth / (slotsCount + 1);
+                    const rowY = minY + usableHeight / 2;
+                    for (let i = 0; i < slotsCount; i++) {
+                        visibleInventory[i].socketTargetX = minX + spacing * (i + 1);
+                        visibleInventory[i].socketTargetY = rowY;
+                        visibleInventory[i].socketAngle = visibleInventory[i].initialAngle;
+                    }
+                } else {
+                    const topRowShapes = Math.ceil(slotsCount / 2);
+                    const botRowShapes = Math.floor(slotsCount / 2);
+                    const row1Y = minY + usableHeight * 0.33;
+                    const row2Y = minY + usableHeight * 0.66;
+                    
+                    const topSpacing = usableWidth / (topRowShapes + 1);
+                    const botSpacing = usableWidth / (botRowShapes + 1);
+                    
+                    let count = 0;
+                    for (let i = 0; i < topRowShapes; i++) {
+                        visibleInventory[count].socketTargetX = minX + topSpacing * (i + 1);
+                        visibleInventory[count].socketTargetY = row1Y;
+                        visibleInventory[count].socketAngle = visibleInventory[count].initialAngle;
+                        count++;
+                    }
+                    for (let i = 0; i < botRowShapes; i++) {
+                        visibleInventory[count].socketTargetX = minX + botSpacing * (i + 1);
+                        visibleInventory[count].socketTargetY = row2Y;
+                        visibleInventory[count].socketAngle = visibleInventory[count].initialAngle;
+                        count++;
+                    }
+                }
+            }
+        }
+        
+        // Dibujar Sockets de Fase 5
+        if (gameState.startsWith("phase5_")) {
+            const elapsed = (now - phase5StartTime) / 1000;
+            let progress = elapsed / 1.5;
+            if (progress > 1) progress = 1;
+            
+            if (gameState === "phase5_drawing_sockets" && progress >= 1.0) {
+                gameState = "phase5_filling_sockets";
+                phase5FillStartTime = performance.now();
+            } else if (gameState === "phase5_filling_sockets") {
+                let fillElapsed = (now - phase5FillStartTime) / 1000;
+                if (fillElapsed >= 0.5) {
+                    gameState = "phase5_interact";
+                }
+            }
+            
+            for (let shape of visibleInventory) {
+                ctx.save();
+                ctx.translate(shape.socketTargetX, shape.socketTargetY);
+                ctx.rotate(shape.socketAngle);
+                
+                ctx.beginPath();
+                let totalVertices = shape.vertices.length;
+                let pointsToDraw = Math.max(1, Math.floor(progress * totalVertices));
+                
+                for (let j = 0; j <= pointsToDraw; j++) {
+                    let v = shape.vertices[j % totalVertices];
+                    if (j === 0) ctx.moveTo(v.relX, v.relY);
+                    else ctx.lineTo(v.relX, v.relY);
+                }
+                
+                if (progress >= 1.0) ctx.closePath();
+                
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = `rgba(150, 150, 150, 0.8)`;
+                ctx.stroke();
+                
+                if (gameState === "phase5_filling_sockets" || gameState === "phase5_interact") {
+                    let fillOpacity = 1.0;
+                    if (gameState === "phase5_filling_sockets") {
+                        fillOpacity = Math.min(1.0, (now - phase5FillStartTime)/1000 / 0.5);
+                    }
+                    ctx.fillStyle = `rgba(200, 200, 200, ${0.4 * fillOpacity})`;
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+        
+        // Físicas de cada forma
+        for (let i = 0; i < visibleInventory.length; i++) {
+            let shape = visibleInventory[i];
+            
+            if (shape.state === "chaos") {
+                shape.centerX += shape.vx;
+                shape.centerY += shape.vy;
+                
+                // Paredes
+                if (shape.centerX < shape.radius) { shape.centerX = shape.radius; shape.vx *= -1; }
+                if (shape.centerX > width - shape.radius) { shape.centerX = width - shape.radius; shape.vx *= -1; }
+                if (shape.centerY < shape.radius) { shape.centerY = shape.radius; shape.vy *= -1; }
+                if (shape.centerY > height - shape.radius) { shape.centerY = height - shape.radius; shape.vy *= -1; }
+                
+            } else if (shape.state === "dragging") {
+                // Péndulo hacia el mouse
+                const forceX = (mouse.x - shape.centerX) * 0.2;
+                const forceY = (mouse.y - shape.centerY) * 0.2;
+                shape.vx = (shape.vx + forceX) * 0.8; 
+                shape.vy = (shape.vy + forceY) * 0.8;
+                shape.centerX += shape.vx;
+                shape.centerY += shape.vy;
+                
+            } else if (shape.state === "dropping") {
+                shape.vy += 0.8; // Gravedad
+                shape.centerX += shape.vx;
+                shape.centerY += shape.vy;
+                
+                if (shape.centerX < shape.radius) { shape.centerX = shape.radius; shape.vx *= -0.5; }
+                if (shape.centerX > width - shape.radius) { shape.centerX = width - shape.radius; shape.vx *= -0.5; }
+                
+                if (shape.centerY >= bottomRowY) {
+                    shape.centerY = bottomRowY;
+                    shape.vy = 0;
+                    shape.vx = 0;
+                    shape.state = "locked";
+                    if (slotsCount > 1) {
+                        shape.slotTargetX = startX + (i * (rowWidth / (slotsCount - 1)));
+                    } else {
+                        shape.slotTargetX = width/2;
+                    }
+                }
+            } else if (shape.state === "locked") {
+                shape.centerX += (shape.slotTargetX - shape.centerX) * 0.1;
+            } else if (shape.state === "snapping") { // Fase 5
+                shape.centerX += (shape.socketTargetX - shape.centerX) * 0.15;
+                shape.centerY += (shape.socketTargetY - shape.centerY) * 0.15;
+                
+                let diff = (shape.socketAngle - shape.angle) % (Math.PI * 2);
+                if (diff !== diff % Math.PI) {
+                    diff = (diff < 0) ? diff + Math.PI * 2 : diff - Math.PI * 2;
+                }
+                shape.angle += diff * 0.15;
+                
+                let dist = Math.hypot(shape.socketTargetX - shape.centerX, shape.socketTargetY - shape.centerY);
+                if (dist < 1) {
+                    shape.state = "socketed";
+                    shape.centerX = shape.socketTargetX;
+                    shape.centerY = shape.socketTargetY;
+                    shape.angle = shape.socketAngle;
+                }
+            } else if (shape.state === "socketed") {
+                shape.centerX = shape.socketTargetX;
+                shape.centerY = shape.socketTargetY;
+                shape.angle = shape.socketAngle;
+            }
+        }
+        
+        // Colisiones Elásticas (Solo entre formas en caos)
+        for (let i = 0; i < visibleInventory.length; i++) {
+            for (let j = i + 1; j < visibleInventory.length; j++) {
+                let s1 = visibleInventory[i];
+                let s2 = visibleInventory[j];
+                if (s1.state === "chaos" && s2.state === "chaos") {
+                    let dx = s2.centerX - s1.centerX;
+                    let dy = s2.centerY - s1.centerY;
+                    let dist = Math.hypot(dx, dy);
+                    let minDist = s1.radius + s2.radius;
+                    if (dist < minDist && dist > 0) {
+                        let overlap = minDist - dist;
+                        let nx = dx / dist;
+                        let ny = dy / dist;
+                        s1.centerX -= nx * overlap / 2; s1.centerY -= ny * overlap / 2;
+                        s2.centerX += nx * overlap / 2; s2.centerY += ny * overlap / 2;
+                        
+                        let kx = (s1.vx - s2.vx);
+                        let ky = (s1.vy - s2.vy);
+                        let p = 2.0 * (nx * kx + ny * ky) / 2.0; 
+                        s1.vx -= p * nx; s1.vy -= p * ny;
+                        s2.vx += p * nx; s2.vy += p * ny;
+                    }
+                }
+            }
+        }
+        
+        // Renderizar las formas
+        for (let shape of visibleInventory) {
+            let currentScale = 1.0;
+            if (shape.state === "locked" || (shape.state === "dropping" && !gameState.startsWith("phase5_"))) {
+                let minX = Math.min(...shape.vertices.map(v => v.relX));
+                let maxX = Math.max(...shape.vertices.map(v => v.relX));
+                let currentWidth = maxX - minX;
+                if (currentWidth > 0) {
+                    let targetScale = (3 * emSize) / currentWidth;
+                    shape.currentScale = shape.currentScale || 1.0;
+                    shape.currentScale += (targetScale - shape.currentScale) * 0.1;
+                    currentScale = shape.currentScale;
+                }
+            } else {
+                shape.currentScale = shape.currentScale || 1.0;
+                shape.currentScale += (1.0 - shape.currentScale) * 0.1;
+                currentScale = shape.currentScale;
+            }
+
+            if (shape.state !== "snapping" && shape.state !== "socketed") {
+                shape.angle = (shape.angle || shape.initialAngle) + shape.rotationSpeed * timeDelta;
+            }
+            let renderAngle = shape.angle;
+            
+            // Inclinación por arrastre
+            if (shape.state === "dragging") {
+                renderAngle = (shape.vx * 0.05); 
+            } else if (shape.state === "locked") {
+                shape.angle *= 0.9; 
+                renderAngle = shape.angle;
+            }
+
+            ctx.save();
+            ctx.translate(shape.centerX, shape.centerY);
+            ctx.rotate(renderAngle);
+            ctx.scale(currentScale, currentScale);
+
+            ctx.beginPath();
+            for (let j = 0; j < shape.vertices.length; j++) {
+                let v = shape.vertices[j];
+                if (j === 0) ctx.moveTo(v.relX, v.relY);
+                else ctx.lineTo(v.relX, v.relY);
+            }
+            ctx.closePath();
+            
+            ctx.fillStyle = `rgba(0, 0, 0, 0.8)`;
+            ctx.strokeStyle = `rgba(0, 0, 0, 0.9)`;
+            ctx.lineWidth = 2;
+            
+            // Efectos de Resaltado
+            if (shape.state === "dragging") {
+                ctx.strokeStyle = `rgba(255, 150, 150, 1)`;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(255, 50, 50, 0.5)';
+            } else if (shape.state === "socketed") {
+                ctx.fillStyle = `rgba(255, 255, 255, 0.9)`;
+                ctx.strokeStyle = `rgba(255, 255, 255, 1.0)`;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+            }
+            
+            ctx.fill(); ctx.stroke();
+            ctx.restore();
+        }
     }
     
     requestAnimationFrame(draw);
