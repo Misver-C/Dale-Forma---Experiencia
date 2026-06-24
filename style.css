@@ -4,8 +4,10 @@ body, html {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: #050510; /* Color de cielo nocturno muy oscuro */
+    background-color: #17171f; /* Color de cielo nocturno muy oscuro */
 }
+
+
 
 #sky-canvas {
     display: block;
