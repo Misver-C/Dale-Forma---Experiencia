@@ -1,12 +1,37 @@
+@font-face {
+    font-family: 'Obliqua Sans';
+    src: url('assets/fuentes/fonnts.com-Obliqua_Sans.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Obliqua Sans';
+    src: url('assets/fuentes/fonnts.com-Obliqua_Sans_Bold.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Obliqua Sans';
+    src: url('assets/fuentes/fonnts.com-Obliqua_Sans_Bold_Italic.otf') format('opentype');
+    font-weight: bold;
+    font-style: italic;
+}
+@font-face {
+    font-family: 'Obliqua Sans';
+    src: url('assets/fuentes/fonnts.com-Obliqua_Sans_Italic.otf') format('opentype');
+    font-weight: normal;
+    font-style: italic;
+}
+
 body, html {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: #17171f; /* Color de cielo nocturno muy oscuro */
+    background-color: #17171f;
+    font-family: 'Obliqua Sans', sans-serif;
 }
-
 
 
 #sky-canvas {
@@ -14,4 +39,136 @@ body, html {
     width: 100%;
     height: 100%;
     cursor: crosshair;
+}
+
+#main-container {
+    width: 100%;
+    height: 100%;
+}
+
+#intro-screen {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: #e9e1cf;
+    z-index: 2;
+    transition: background-color 2.5s ease-in-out;
+}
+
+#intro-screen.fade-bg {
+    background-color: transparent;
+}
+
+#phase1-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 60px;
+}
+
+.word-dale-container, .word-forma-container {
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+}
+
+.word-dale {
+    max-width: 80vw;
+    height: auto;
+    max-height: 25vh;
+    transform: translateY(-100%);
+    opacity: 0;
+    animation: slideDownIntro 0.5s ease-out forwards;
+}
+
+.word-forma {
+    max-width: 80vw;
+    height: auto;
+    max-height: 25vh;
+    transform: translateY(100%);
+    opacity: 0;
+    animation: slideUpIntro 0.5s ease-out forwards;
+}
+
+@keyframes slideDownIntro {
+    0% { transform: translateY(-100%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideUpIntro {
+    0% { transform: translateY(100%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.word-dale.hide {
+    animation: slideDownIntroReverse 1s ease-in forwards;
+}
+.word-forma.hide {
+    animation: slideUpIntroReverse 1s ease-in forwards;
+}
+
+@keyframes slideDownIntroReverse {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-100%); opacity: 0; }
+}
+
+@keyframes slideUpIntroReverse {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(100%); opacity: 0; }
+}
+
+#start-btn {
+    opacity: 0;
+    animation: fadeInBtn 1.5s ease-out 0.5s forwards;
+    background-color: #4CAF50;
+    color: white;
+    border: 3px solid #4CAF50;
+    border-radius: 50px;
+    height: 2.5em;
+    padding: 0 2em;
+    font-size: 1.2rem;
+    font-family: 'Obliqua Sans', sans-serif;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.4s, color 0.4s, border-color 0.4s;
+    outline: none;
+}
+
+#start-btn:hover {
+    background-color: white;
+    color: #4CAF50;
+    border-color: #4CAF50;
+}
+
+#start-btn.hide {
+    animation: fadeOutBtn 0.5s ease-in forwards;
+    pointer-events: none;
+}
+
+@keyframes fadeInBtn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+@keyframes fadeOutBtn {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
 }

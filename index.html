@@ -7,7 +7,22 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="sky-canvas"></canvas>
+    <div id="main-container">
+        <div id="intro-screen">
+            <div class="logo-container">
+                <div class="word-dale-container">
+                    <img src="assets/intro/dale.png" alt="Dale" class="word-dale" id="word-dale">
+                </div>
+                <div class="word-forma-container">
+                    <img src="assets/intro/forma.png" alt="Forma" class="word-forma" id="word-forma">
+                </div>
+            </div>
+            <button id="start-btn">Iniciar experiencia</button>
+        </div>
+        <div id="phase1-container">
+            <canvas id="sky-canvas"></canvas>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
