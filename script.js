@@ -673,7 +673,7 @@ function draw() {
             hidePhaseUI();
             setTimeout(() => {
                 document.getElementById('phase-text-wrapper').classList.add('top-pos');
-                showPhaseUI("AGARRALAS", "Para frenar su movimiento");
+                showPhaseUI("AGÁRRALAS", "Para frenar su movimiento");
             }, 500);
             
             for (let shape of visibleInventory) {
@@ -1127,7 +1127,7 @@ function draw() {
                 
                 hidePhaseUI();
                 setTimeout(() => {
-                    showPhaseUI("ENCAJALAS", "");
+                    showPhaseUI("ENCÁJALAS", "");
                 }, 500);
                 
                 const minX = 10 * emSize;
