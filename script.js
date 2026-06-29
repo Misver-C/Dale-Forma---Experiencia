@@ -1621,16 +1621,22 @@ if (btnReiniciar) {
             globalRotationAngle = 0;
             whiteOpacity = 0;
             
-            gameState = "normal";
+            gameState = "intro";
+            
+            let introScreen = document.getElementById('intro-screen');
+            introScreen.style.display = 'flex';
+            introScreen.classList.remove('fade-bg');
+            document.getElementById('word-dale').classList.remove('hide');
+            document.getElementById('word-forma').classList.remove('hide');
+            document.getElementById('start-btn').classList.remove('hide');
             
             document.getElementById('phase7-ui').classList.remove('show');
             document.getElementById('phase-text-wrapper').classList.remove('top-pos', 'text-black');
             hidePhaseUI();
             
-            generateStars();
+            stars = [];
             
             overlay.style.opacity = '0';
-            showPhaseUI("CREA", "Distintas formas trazando estrellas", true);
         }, 1000);
     });
 }
