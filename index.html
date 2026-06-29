@@ -21,8 +21,35 @@
         </div>
         <div id="phase1-container">
             <canvas id="sky-canvas"></canvas>
+            
+            <div id="ui-layer">
+                <div id="shape-counter-container" class="sweep-container">
+                    <div id="shape-counter" class="sweep-text">
+                        <span id="counter-current">0</span><span id="counter-total">/8</span>
+                    </div>
+                </div>
+                
+                <div id="phase-text-wrapper">
+                    <div class="sweep-container">
+                        <div id="phase-title" class="sweep-text">CREA</div>
+                    </div>
+                    <div class="sweep-container" style="margin-top: 5px;">
+                        <div id="phase-subtitle" class="sweep-text">Distintas formas trazando estrellas</div>
+                    </div>
+                </div>
+                
+                <div id="phase7-ui">
+                    <div id="restart-text">¿Deseas reiniciar la experiencia?</div>
+                    <div id="restart-buttons">
+                        <button id="btn-reiniciar" class="action-btn red-btn">Reiniciar</button>
+                        <button id="btn-volver" class="action-btn green-btn">Volver al inicio</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+    
+    <div id="fade-overlay"></div>
     <script src="script.js"></script>
 </body>
 </html>

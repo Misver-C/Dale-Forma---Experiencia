@@ -266,7 +266,15 @@ function createShapeFromPath(path) {
     let vertices = path.map(star => ({ x: star.x, y: star.y }));
     inventory.push({ vertices: [...vertices] });
     fallingShapes.push({ vertices: vertices, velocityY: 0, gravity: 0.15 });
-    if (inventory.length === 8 && gameState === "normal") triggerArrowEvent();
+    
+    // Actualizar UI
+    let counterEl = document.getElementById('counter-current');
+    if (counterEl) counterEl.innerText = inventory.length;
+    
+    if (inventory.length === 8 && gameState === "normal") {
+        hidePhaseUI(); // Ocultar UI antes de transicionar
+        triggerArrowEvent();
+    }
 }
 
 function triggerArrowEvent() {
@@ -439,6 +447,12 @@ window.addEventListener('mouseup', () => {
                 gameState = "phase7_free_view";
                 globalCamRotX = nucRotX; 
                 globalCamRotY = nucRotY;
+                
+                hidePhaseUI();
+                setTimeout(() => {
+                    showPhaseUI("¡HAS CONSTRUIDO TU FIGURA!", "");
+                    document.getElementById('phase7-ui').classList.add('show');
+                }, 500);
             }
         } else {
             draggedShape.state = "dropping";
@@ -644,12 +658,24 @@ function draw() {
             gameState = "phase4_waiting";
             phase4ClickCount = 0;
             phase4ShakeEndTime = 0;
+            
+            let phaseTextWrapper = document.getElementById('phase-text-wrapper');
+            phaseTextWrapper.classList.remove('top-pos');
+            phaseTextWrapper.classList.add('text-black');
+            showPhaseUI("RÓMPELA", "Clickea para golpear la figura");
         }
     } else if (gameState === "phase4_pre_chaos") {
         globalScrollY += 60; arrowCinematicScroll += 60;
         const elapsed = (now - preChaosStartTime) / 1000;
         if (elapsed >= 0.3) {
             gameState = "phase4_chaos";
+            
+            hidePhaseUI();
+            setTimeout(() => {
+                document.getElementById('phase-text-wrapper').classList.add('top-pos');
+                showPhaseUI("AGARRALAS", "Para frenar su movimiento");
+            }, 500);
+            
             for (let shape of visibleInventory) {
                 shape.state = "chaos";
                 shape.centerX = width/2;
@@ -671,6 +697,11 @@ function draw() {
             gameState = "phase6_extruding";
             phase6StartTime = performance.now();
             init3DFaces();
+            
+            hidePhaseUI();
+            setTimeout(() => {
+                showPhaseUI("CONSTRUYE", "Selecciona una forma como núcleo y arrastra el resto a su órbita.");
+            }, 500);
         }
     }
     
@@ -1093,6 +1124,11 @@ function draw() {
             if (allLocked && visibleInventory.length > 0) {
                 gameState = "phase5_drawing_sockets";
                 phase5StartTime = performance.now();
+                
+                hidePhaseUI();
+                setTimeout(() => {
+                    showPhaseUI("ENCAJALAS", "");
+                }, 500);
                 
                 const minX = 10 * emSize;
                 const maxX = width - 10 * emSize;
@@ -1538,7 +1574,70 @@ if(startBtn) {
             setTimeout(() => {
                 gameState = "normal";
                 document.getElementById('intro-screen').style.display = 'none'; // Desaparecer por completo
+                showPhaseUI("CREA", "Distintas formas trazando estrellas", true);
             }, 2500);
         }, 500); // 0.5s, ajustado al nuevo tiempo de animaciones
+    });
+}
+
+// Funciones de UI Reutilizables
+function showPhaseUI(titleText, subtitleText, showCounter = false) {
+    if (showCounter) {
+        document.getElementById('counter-current').innerText = inventory.length;
+        document.getElementById('shape-counter').classList.add('show');
+    }
+    
+    document.getElementById('phase-title').innerText = titleText;
+    document.getElementById('phase-title').classList.add('show');
+    
+    document.getElementById('phase-subtitle').innerText = subtitleText;
+    setTimeout(() => {
+        document.getElementById('phase-subtitle').classList.add('show');
+    }, 500);
+}
+
+function hidePhaseUI() {
+    document.getElementById('shape-counter').classList.remove('show');
+    document.getElementById('phase-title').classList.remove('show');
+    document.getElementById('phase-subtitle').classList.remove('show');
+}
+
+// Botones de Fase 7
+const btnReiniciar = document.getElementById('btn-reiniciar');
+if (btnReiniciar) {
+    btnReiniciar.addEventListener('click', () => {
+        let overlay = document.getElementById('fade-overlay');
+        overlay.style.opacity = '1';
+        
+        setTimeout(() => {
+            inventory = [];
+            fallingShapes = [];
+            visibleInventory = [];
+            master3DFaces = [];
+            phase4ClickCount = 0;
+            nucleusShape = null;
+            globalScrollY = 0;
+            arrowCinematicScroll = 0;
+            globalRotationAngle = 0;
+            whiteOpacity = 0;
+            
+            gameState = "normal";
+            
+            document.getElementById('phase7-ui').classList.remove('show');
+            document.getElementById('phase-text-wrapper').classList.remove('top-pos', 'text-black');
+            hidePhaseUI();
+            
+            generateStars();
+            
+            overlay.style.opacity = '0';
+            showPhaseUI("CREA", "Distintas formas trazando estrellas", true);
+        }, 1000);
+    });
+}
+
+const btnVolver = document.getElementById('btn-volver');
+if (btnVolver) {
+    btnVolver.addEventListener('click', () => {
+        window.location.href = "https://misver-c.github.io/Dale-Forma---Misael-Vergara-2026/";
     });
 }
